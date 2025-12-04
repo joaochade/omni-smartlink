@@ -136,12 +136,16 @@
             androidPlayStore: 'https://play.google.com/store/apps/details?id=br.com.omnipharma.omnisaude&hl=pt_PT',
             desktopLP: 'https://lp.omnisaude.app/baixar-app/',
             
-            // Deep link schemes (ajuste conforme necessário)
-            deepLinkScheme: 'omnisaude://',
+            // Deep link schemes para testar (tenta múltiplos)
+            deepLinkSchemes: [
+                'omnisaude://',
+                'omni://',
+                'br.com.omnipharma.omnisaude://'
+            ],
             
             // Timings
-            appCheckDelay: 2500,
-            fallbackDelay: 3000
+            appCheckDelay: 1500,
+            fallbackDelay: 2000
         };
 
         // Debug helper
@@ -220,7 +224,7 @@
             debug('Tentando abrir app via deep link');
             
             let appOpened = false;
-            const startTime = Date.now();
+            let attemptedSchemes = 0;
 
             // Listener para detectar se saiu da página (app abriu)
             const visibilityHandler = () => {
@@ -239,35 +243,48 @@
             window.addEventListener('blur', blurHandler);
             window.addEventListener('pagehide', blurHandler);
 
-            // Tenta abrir via deep link
-            const deepLink = CONFIG.deepLinkScheme;
-            debug(`Tentando deep link: ${deepLink}`);
-            
-            // Método 1: iframe (mais confiável)
-            const iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            iframe.src = deepLink;
-            document.body.appendChild(iframe);
-
-            // Método 2: location href como fallback
-            setTimeout(() => {
-                if (!appOpened) {
-                    window.location.href = deepLink;
+            // Tenta múltiplos schemes
+            function tryNextScheme() {
+                if (attemptedSchemes >= CONFIG.deepLinkSchemes.length || appOpened) {
+                    return;
                 }
-            }, 500);
+
+                const deepLink = CONFIG.deepLinkSchemes[attemptedSchemes];
+                debug(`Tentando scheme ${attemptedSchemes + 1}: ${deepLink}`);
+                attemptedSchemes++;
+                
+                // Método 1: iframe (funciona melhor no iOS)
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.style.width = '0';
+                iframe.style.height = '0';
+                iframe.src = deepLink;
+                document.body.appendChild(iframe);
+
+                // Remove iframe após tentar
+                setTimeout(() => {
+                    if (iframe && iframe.parentNode) {
+                        iframe.parentNode.removeChild(iframe);
+                    }
+                    
+                    // Tenta o próximo scheme se não abriu
+                    if (!appOpened && attemptedSchemes < CONFIG.deepLinkSchemes.length) {
+                        tryNextScheme();
+                    }
+                }, 500);
+            }
+
+            // Inicia tentativas
+            tryNextScheme();
 
             // Verifica após delay se o app abriu
             setTimeout(() => {
                 document.removeEventListener('visibilitychange', visibilityHandler);
                 window.removeEventListener('blur', blurHandler);
                 window.removeEventListener('pagehide', blurHandler);
-                
-                if (iframe && iframe.parentNode) {
-                    iframe.parentNode.removeChild(iframe);
-                }
 
                 if (!appOpened) {
-                    debug('App não abriu, redirecionando para loja');
+                    debug('Nenhum deep link funcionou, redirecionando para loja');
                     window.location.href = storeUrl;
                 }
             }, CONFIG.appCheckDelay);
