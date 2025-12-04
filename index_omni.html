@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acessar Omni Saúde App</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+        
+        .container {
+            text-align: center;
+            color: white;
+            max-width: 500px;
+            width: 100%;
+        }
+        
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 30px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        h1 {
+            font-size: 24px;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+        
+        .message {
+            font-size: 16px;
+            opacity: 0.9;
+            line-height: 1.5;
+        }
+        
+        .fallback-card {
+            display: none;
+            background: white;
+            border-radius: 16px;
+            padding: 40px 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            color: #333;
+        }
+        
+        .fallback-card h2 {
+            color: #667eea;
+            font-size: 22px;
+            margin-bottom: 15px;
+        }
+        
+        .fallback-card p {
+            color: #666;
+            margin-bottom: 25px;
+            line-height: 1.6;
+        }
+        
+        .store-button {
+            display: inline-block;
+            width: 100%;
+            max-width: 280px;
+            padding: 16px 32px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 16px;
+            margin: 8px 0;
+            transition: all 0.3s ease;
+        }
+        
+        .store-button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .store-button:active {
+            transform: translateY(0);
+        }
+
+        .debug-info {
+            display: none;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 12px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="loadingView">
+            <div class="spinner"></div>
+            <h1>Abrindo Omni Saúde App...</h1>
+            <p class="message">Aguarde um momento</p>
+        </div>
+        
+        <div class="fallback-card" id="fallbackView">
+            <h2>📱 Baixe o Omni Saúde App</h2>
+            <p id="fallbackMessage">O app não está instalado no seu dispositivo.</p>
+            <div id="storeLinks"></div>
+        </div>
+
+        <div class="debug-info" id="debugInfo"></div>
+    </div>
+
+    <script>
+        // Configurações
+        const CONFIG = {
+            iosAppStore: 'https://apps.apple.com/app/omni-sa%C3%BAde-app/id6449550736',
+            androidPlayStore: 'https://play.google.com/store/apps/details?id=br.com.omnipharma.omnisaude&hl=pt_PT',
+            desktopLP: 'https://lp.omnisaude.app/baixar-app/',
+            
+            // Deep link schemes (ajuste conforme necessário)
+            deepLinkScheme: 'omnisaude://',
+            
+            // Timings
+            appCheckDelay: 2500,
+            fallbackDelay: 3000
+        };
+
+        // Debug helper
+        function debug(message) {
+            console.log('[Omni Smart Link]', message);
+            const debugDiv = document.getElementById('debugInfo');
+            if (debugDiv) {
+                debugDiv.style.display = 'block';
+                debugDiv.innerHTML += `<div>${new Date().toLocaleTimeString()}: ${message}</div>`;
+            }
+        }
+
+        // Detecta o tipo de dispositivo
+        function detectDevice() {
+            const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+            debug(`User Agent: ${userAgent}`);
+            
+            // Check if mobile
+            const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase());
+            
+            if (!isMobile) {
+                debug('Dispositivo: Desktop');
+                return 'desktop';
+            }
+            
+            // Check iOS
+            if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
+                debug('Dispositivo: iOS');
+                return 'ios';
+            }
+            
+            // Check Android
+            if (/android/i.test(userAgent)) {
+                debug('Dispositivo: Android');
+                return 'android';
+            }
+            
+            debug('Dispositivo: Unknown mobile');
+            return 'unknown';
+        }
+
+        // Mostra o fallback
+        function showFallback(device, storeUrl) {
+            debug('Mostrando fallback');
+            document.getElementById('loadingView').style.display = 'none';
+            document.getElementById('fallbackView').style.display = 'block';
+            
+            const storeLinks = document.getElementById('storeLinks');
+            
+            if (device === 'ios') {
+                storeLinks.innerHTML = `
+                    <a href="${CONFIG.iosAppStore}" class="store-button">
+                        🍎 Baixar na App Store
+                    </a>
+                `;
+            } else if (device === 'android') {
+                storeLinks.innerHTML = `
+                    <a href="${CONFIG.androidPlayStore}" class="store-button">
+                        📱 Baixar na Google Play
+                    </a>
+                `;
+            } else {
+                storeLinks.innerHTML = `
+                    <a href="${CONFIG.iosAppStore}" class="store-button">
+                        🍎 App Store
+                    </a>
+                    <a href="${CONFIG.androidPlayStore}" class="store-button">
+                        📱 Google Play
+                    </a>
+                `;
+            }
+        }
+
+        // Tenta abrir o app com deep link
+        function tryOpenApp(device, storeUrl) {
+            debug('Tentando abrir app via deep link');
+            
+            let appOpened = false;
+            const startTime = Date.now();
+
+            // Listener para detectar se saiu da página (app abriu)
+            const visibilityHandler = () => {
+                if (document.hidden) {
+                    appOpened = true;
+                    debug('App abriu! (página ficou hidden)');
+                }
+            };
+
+            const blurHandler = () => {
+                appOpened = true;
+                debug('App abriu! (blur event)');
+            };
+
+            document.addEventListener('visibilitychange', visibilityHandler);
+            window.addEventListener('blur', blurHandler);
+            window.addEventListener('pagehide', blurHandler);
+
+            // Tenta abrir via deep link
+            const deepLink = CONFIG.deepLinkScheme;
+            debug(`Tentando deep link: ${deepLink}`);
+            
+            // Método 1: iframe (mais confiável)
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = deepLink;
+            document.body.appendChild(iframe);
+
+            // Método 2: location href como fallback
+            setTimeout(() => {
+                if (!appOpened) {
+                    window.location.href = deepLink;
+                }
+            }, 500);
+
+            // Verifica após delay se o app abriu
+            setTimeout(() => {
+                document.removeEventListener('visibilitychange', visibilityHandler);
+                window.removeEventListener('blur', blurHandler);
+                window.removeEventListener('pagehide', blurHandler);
+                
+                if (iframe && iframe.parentNode) {
+                    iframe.parentNode.removeChild(iframe);
+                }
+
+                if (!appOpened) {
+                    debug('App não abriu, redirecionando para loja');
+                    window.location.href = storeUrl;
+                }
+            }, CONFIG.appCheckDelay);
+
+            // Mostra fallback após um tempo maior
+            setTimeout(() => {
+                if (!appOpened) {
+                    showFallback(device, storeUrl);
+                }
+            }, CONFIG.fallbackDelay);
+        }
+
+        // Função principal
+        function handleRedirect() {
+            const device = detectDevice();
+            
+            switch(device) {
+                case 'desktop':
+                    debug('Redirecionando para landing page desktop');
+                    window.location.href = CONFIG.desktopLP;
+                    break;
+                    
+                case 'ios':
+                    tryOpenApp(device, CONFIG.iosAppStore);
+                    break;
+                    
+                case 'android':
+                    tryOpenApp(device, CONFIG.androidPlayStore);
+                    break;
+                    
+                default:
+                    debug('Dispositivo desconhecido, mostrando opções');
+                    setTimeout(() => {
+                        showFallback(device, null);
+                    }, 1000);
+            }
+        }
+
+        // Inicia quando a página carregar
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', handleRedirect);
+        } else {
+            handleRedirect();
+        }
+
+        debug('Script carregado e pronto');
+    </script>
+</body>
+</html>
